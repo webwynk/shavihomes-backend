@@ -2,6 +2,10 @@ const { z } = require("zod");
 const Blog = require("../models/Blog");
 const fs = require("fs");
 const path = require("path");
+const { isAdminUser } = require("../middleware/authMiddleware");
+
+const isValidCoverImage = (val) =>
+  !val || val.startsWith("/uploads/") || val.startsWith("http://") || val.startsWith("https://");
 
 // Validation Schema (coverImage is optional here since it comes from file upload)
 const blogSchema = z.object({
@@ -10,7 +14,10 @@ const blogSchema = z.object({
   author: z.string().min(1, "Author is required"),
   content: z.string().min(1, "Content is required"),
   excerpt: z.string().min(1, "Excerpt is required"),
-  coverImage: z.string().optional(),
+  coverImage: z
+    .string()
+    .refine(isValidCoverImage, "Cover image must be a valid URL or /uploads/ path")
+    .optional(),
   category: z.string().optional(),
   status: z.enum(["Draft", "Published"]).optional(),
 });
@@ -79,23 +86,25 @@ const createBlog = async (req, res) => {
 // @access  Public/Private
 const getBlogs = async (req, res) => {
   try {
-    const { status, limit = 10, page = 1 } = req.query;
+    const { status } = req.query;
+    const parsedPage = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const parsedLimit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
 
-    let query = {};
+    const query = {};
 
     // If no auth token or not admin, only show published blogs
-    if (!req.user || req.user.role !== "admin") {
+    if (!isAdminUser(req.user)) {
       query.status = "Published";
-    } else if (status) {
+    } else if (status === "Draft" || status === "Published") {
       query.status = status;
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const skip = (parsedPage - 1) * parsedLimit;
 
     const blogs = await Blog.find(query)
       .sort({ publishedAt: -1, createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(parsedLimit);
 
     const total = await Blog.countDocuments(query);
 
@@ -104,8 +113,8 @@ const getBlogs = async (req, res) => {
       data: blogs,
       pagination: {
         total,
-        page: parseInt(page),
-        pages: Math.ceil(total / parseInt(limit)),
+        page: parsedPage,
+        pages: Math.ceil(total / parsedLimit),
       },
     });
   } catch (error) {
@@ -121,10 +130,10 @@ const getBlogBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
 
-    let query = { slug };
+    const query = { slug };
 
     // If no auth token or not admin, only show published blogs
-    if (!req.user || req.user.role !== "admin") {
+    if (!isAdminUser(req.user)) {
       query.status = "Published";
     }
 
@@ -165,7 +174,7 @@ const getBlogById = async (req, res) => {
 const updateBlog = async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+    const updateData = blogSchema.partial().parse(req.body);
 
     // Get existing blog to handle old image deletion
     const existingBlog = await Blog.findById(id);
@@ -208,6 +217,12 @@ const updateBlog = async (req, res) => {
     // Delete uploaded file if there's an error
     if (req.file) {
       fs.unlinkSync(req.file.path);
+    }
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, errors: error.errors });
+    }
+    if (error && error.code === 11000) {
+      return res.status(400).json({ success: false, message: "A blog with this slug already exists" });
     }
     console.error("Update error:", error);
     res.status(500).json({ success: false, message: "Server error" });

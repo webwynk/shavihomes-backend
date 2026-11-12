@@ -8,7 +8,6 @@ const ConsultationSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    required: [true, "Phone number is required"],
     trim: true,
   },
   email: {

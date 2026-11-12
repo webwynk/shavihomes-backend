@@ -1,5 +1,15 @@
 const transporter = require("../config/email");
 
+/** Escape HTML special characters before interpolating user-supplied strings into HTML templates. */
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 const sendConsultationEmail = async (data) => {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !process.env.NOTIFICATION_EMAIL) {
     console.log("Email notification skipped: No credentials in .env");
@@ -36,6 +46,9 @@ const sendResponseEmail = async ({ to, subject, message, adminEmail, adminName }
     throw new Error("Email credentials missing");
   }
 
+  const safeMessage = escapeHtml(message).replace(/\n/g, "<br>");
+  const safeAdminName = escapeHtml(adminName);
+
   const mailOptions = {
     from: `"${adminName} via Shavi Homes" <${process.env.EMAIL_USER}>`,
     to,
@@ -49,10 +62,10 @@ const sendResponseEmail = async ({ to, subject, message, adminEmail, adminName }
         </div>
         <div style="padding: 30px;">
           <p>Hi,</p>
-          <p>${message.replace(/\n/g, '<br>')}</p>
+          <p>${safeMessage}</p>
           <br/>
           <p>Best regards,</p>
-          <p><strong>${adminName}</strong><br/>
+          <p><strong>${safeAdminName}</strong><br/>
           Shavi Homes Team</p>
         </div>
         <div style="background: #f9f9f9; padding: 20px; text-align: center; font-size: 12px; color: #999;">
@@ -74,4 +87,5 @@ const sendResponseEmail = async ({ to, subject, message, adminEmail, adminName }
 module.exports = {
   sendConsultationEmail,
   sendResponseEmail,
+  escapeHtml,
 };

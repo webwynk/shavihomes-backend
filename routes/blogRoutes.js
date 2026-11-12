@@ -8,12 +8,12 @@ const {
   updateBlog,
   deleteBlog,
 } = require("../controllers/blogController");
-const { protect, adminOnly } = require("../middleware/authMiddleware");
+const { protect, optionalProtect, adminOnly } = require("../middleware/authMiddleware");
 const { upload } = require("../config/multer");
 
-// Public routes (get published blogs)
-router.get("/", getBlogs);
-router.get("/:slug", getBlogBySlug);
+// Public routes (or all blogs when authenticated as admin)
+router.get("/", optionalProtect, getBlogs);
+router.get("/:slug", optionalProtect, getBlogBySlug);
 
 // Protected admin routes
 router.post("/", protect, adminOnly, createBlog);

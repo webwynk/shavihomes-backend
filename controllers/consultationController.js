@@ -3,15 +3,20 @@ const Consultation = require("../models/Consultation");
 const { sendConsultationEmail, sendResponseEmail } = require("../utils/sendEmail");
 
 // Validation Schema
-const consultationSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  phone: z.string().optional(),
-  email: z.string().email("Invalid email address").optional().or(z.literal("")),
-  type: z.string().optional(),
-  budget: z.string().optional(),
-  message: z.string().optional(),
-  source: z.string().optional(),
-});
+const consultationSchema = z
+  .object({
+    name: z.string().min(1, "Name is required"),
+    phone: z.string().optional(),
+    email: z.string().email("Invalid email address").optional().or(z.literal("")),
+    type: z.string().optional(),
+    budget: z.string().optional(),
+    message: z.string().optional(),
+    source: z.string().optional(),
+  })
+  .refine(
+    (data) => Boolean((data.phone && data.phone.trim()) || (data.email && data.email.trim())),
+    { message: "Either phone number or email is required", path: ["phone"] }
+  );
 
 // @desc    Create new consultation
 // @route   POST /api/consultations
@@ -103,6 +108,9 @@ const deleteConsultation = async (req, res) => {
 const respondToConsultation = async (req, res) => {
   try {
     const { message, subject } = req.body;
+    if (typeof message !== "string" || !message.trim()) {
+      return res.status(400).json({ success: false, message: "Response message is required." });
+    }
     const consultation = await Consultation.findById(req.params.id);
 
     if (!consultation) {
