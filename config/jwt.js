@@ -22,3 +22,4 @@ function getJwtSecret() {
 }
 
 module.exports = { getJwtSecret };
+
